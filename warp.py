@@ -1,11 +1,14 @@
 import torch, kornia, h5py, imageio
+import matplotlib.pyplot as plt
 import numpy as np
 
-prefix = 'data'
-fname1 = '271147142_778c4e7999_o'
-fname2 = '275191466_a33f8c30b7_o'
-#fname1 = '47698078_3766965066'
-#fname2 = '18698491_4586522698'
+# This is a failure mode, with different aspect ratios
+fname1 = '47698078_3766965066'
+fname2 = '18698491_4586522698'
+
+# This works
+#fname1 = '271147142_778c4e7999_o'
+#fname2 = '275191466_a33f8c30b7_o'
 
 def get_K_Rt(K_: [3, 3], R: [3, 3], T: [3]):
     B = 1
@@ -28,13 +31,13 @@ def read_data(fname):
         * depth tensor
         * kornia.PinholeCamera instance
     '''
-    img = imageio.imread(f'{prefix}/images/{fname}.jpg')
+    img = imageio.imread(f'data/images/{fname}.jpg')
     img = torch.from_numpy(img).to(torch.float32) / 255
 
-    with h5py.File(f'{prefix}/depth_maps/{fname}.h5', 'r') as hdf:
+    with h5py.File(f'data/depth_maps/{fname}.h5', 'r') as hdf:
         depth = torch.from_numpy(hdf['depth'][()]).to(torch.float32)
 
-    with h5py.File(f'{prefix}/calibration/calibration_{fname}.h5', 'r') as hdf:
+    with h5py.File(f'data/calibration/calibration_{fname}.h5', 'r') as hdf:
         K = torch.from_numpy(hdf['K'][()]).to(torch.float32)
         R = torch.from_numpy(hdf['R'][()]).to(torch.float32)
         T = torch.from_numpy(hdf['T'][()]).to(torch.float32)
@@ -62,7 +65,6 @@ warp_21 = kornia.geometry.warp_frame_depth(
     img1_bchw, dep2[None, None], trans_21, K2
 )
 
-import matplotlib.pyplot as plt
 fig, axes = plt.subplots(2, 3, constrained_layout=True)
 axes[0, 0].imshow(img1.numpy())
 axes[1, 0].imshow(img2.numpy())
