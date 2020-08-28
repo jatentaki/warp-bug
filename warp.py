@@ -65,12 +65,26 @@ def pad(img: ['H', 'W', 'C'], size, value=0.) -> ['h', 'w', 'C']:
     xpad = size[0] - cropped.shape[0]
     ypad = size[1] - cropped.shape[1]
 
+    xb = xpad // 2
+    yb = ypad // 2
+    xa = xpad - xb
+    ya = ypad - yb
+
     # not that F.pad takes sizes starting from the last dimension
-    padded = F.pad(cropped, (0, 0, 0, ypad, 0, xpad), mode='constant')
+    padded = F.pad(cropped, (0, 0, yb, ya, xb, xa), mode='constant')
 
     assert padded.shape[:2] == size
 
     return padded
+
+def adjust_K(K, f, shape):
+    fx, fy = K[:, 0, 0], K[:, 1, 1]
+
+    return torch.tensor([
+        [fx * f, 0., shape[0] / 2],
+        [0., fy * f, shape[1] / 2],
+        [0.,      0.,          1.],
+    ]).unsqueeze(0)
 
 def scale_and_pad(img, depth, K, size):
     '''
@@ -87,7 +101,7 @@ def scale_and_pad(img, depth, K, size):
     else:
         scale_size = (int(f * img.shape[0]), size[1])
 
-    K     = kornia.geometry.epipolar.scale_intrinsics(K, f)
+    K     = adjust_K(K, f, shape)
     img   = pad(rescale(img, scale_size), size)
     depth = pad(rescale(depth.unsqueeze(-1), scale_size), size).squeeze(-1)
 
@@ -117,11 +131,16 @@ warp_21 = kornia.geometry.warp_frame_depth(
     img1_bchw, dep2[None, None], trans_21, K2
 )
 
-fig, axes = plt.subplots(2, 3, constrained_layout=True)
+w12 = warp_12[0].permute(1, 2, 0).numpy()
+w21 = warp_21[0].permute(1, 2, 0).numpy()
+
+fig, axes = plt.subplots(2, 4, constrained_layout=True)
 axes[0, 0].imshow(img1.numpy())
 axes[1, 0].imshow(img2.numpy())
 axes[0, 1].imshow(dep1.numpy())
 axes[1, 1].imshow(dep2.numpy())
-axes[0, 2].imshow(warp_12[0].permute(1, 2, 0).numpy())
-axes[1, 2].imshow(warp_21[0].permute(1, 2, 0).numpy())
+axes[0, 2].imshow(w12)
+axes[1, 2].imshow(w21)
+axes[0, 3].imshow((img1.numpy() + w12) / 2)
+axes[1, 3].imshow((img2.numpy() + w21) / 2)
 plt.show()
