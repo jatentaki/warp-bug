@@ -4,12 +4,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # This is a failure mode, with different aspect ratios
-fname1 = '47698078_3766965066'
-fname2 = '18698491_4586522698'
+#fname1 = 'sc_1'
+#fname2 = 'sc_2'
+
+#fname1 = 'ng_1'
+#fname2 = 'ng_2'
+
+fname1 = 'ip_1'
+fname2 = 'ip_2'
 
 # This works
-#fname1 = '271147142_778c4e7999_o'
-#fname2 = '275191466_a33f8c30b7_o'
+#fname1 = 'bt_1'
+#fname2 = 'bt_2'
 
 def get_K_Rt(K_: [3, 3], R: [3, 3], T: [3]):
     B = 1
@@ -38,7 +44,7 @@ def read_data(fname):
     with h5py.File(f'data/depth_maps/{fname}.h5', 'r') as hdf:
         depth = torch.from_numpy(hdf['depth'][()]).to(torch.float32)
 
-    with h5py.File(f'data/calibration/calibration_{fname}.h5', 'r') as hdf:
+    with h5py.File(f'data/calibration/{fname}.h5', 'r') as hdf:
         K = torch.from_numpy(hdf['K'][()]).to(torch.float32)
         R = torch.from_numpy(hdf['R'][()]).to(torch.float32)
         T = torch.from_numpy(hdf['T'][()]).to(torch.float32)
@@ -80,6 +86,9 @@ def pad(img: ['H', 'W', 'C'], size, value=0.) -> ['h', 'w', 'C']:
 def adjust_K(K, f, shape):
     fx, fy = K[:, 0, 0], K[:, 1, 1]
 
+    print('before')
+    print(K)
+
     return torch.tensor([
         [fx * f, 0., shape[0] / 2],
         [0., fy * f, shape[1] / 2],
@@ -105,6 +114,8 @@ def scale_and_pad(img, depth, K, size):
     img   = pad(rescale(img, scale_size), size)
     depth = pad(rescale(depth.unsqueeze(-1), scale_size), size).squeeze(-1)
 
+    print(K)
+
     return img, depth, K
 
 img1, dep1, K1, Rt1 = read_data(fname1)
@@ -122,25 +133,23 @@ trans_12 = Rt2 @ torch.inverse(Rt1)
 trans_21 = Rt1 @ torch.inverse(Rt2)
 
 # warp from image 2 to image 1
-warp_12 = kornia.geometry.warp_frame_depth(
+warp_21 = kornia.geometry.warp_frame_depth(
     img2_bchw, dep1[None, None], trans_12, K1
 )
 
 # warp from image 1 to image 2
-warp_21 = kornia.geometry.warp_frame_depth(
+warp_12 = kornia.geometry.warp_frame_depth(
     img1_bchw, dep2[None, None], trans_21, K2
 )
 
 w12 = warp_12[0].permute(1, 2, 0).numpy()
 w21 = warp_21[0].permute(1, 2, 0).numpy()
 
-fig, axes = plt.subplots(2, 4, constrained_layout=True)
+fig, axes = plt.subplots(2, 3, constrained_layout=True)
 axes[0, 0].imshow(img1.numpy())
 axes[1, 0].imshow(img2.numpy())
-axes[0, 1].imshow(dep1.numpy())
-axes[1, 1].imshow(dep2.numpy())
-axes[0, 2].imshow(w12)
-axes[1, 2].imshow(w21)
-axes[0, 3].imshow((img1.numpy() + w12) / 2)
-axes[1, 3].imshow((img2.numpy() + w21) / 2)
+axes[0, 1].imshow(w21)
+axes[1, 1].imshow(w12)
+axes[0, 2].imshow((img1.numpy() + w21) / 2)
+axes[1, 2].imshow((img2.numpy() + w12) / 2)
 plt.show()
