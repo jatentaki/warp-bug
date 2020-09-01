@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # This is a failure mode, with different aspect ratios
-fname1 = '47698078_3766965066'
-fname2 = '18698491_4586522698'
+#fname1 = '47698078_3766965066'
+#fname2 = '18698491_4586522698'
 
 # This works
-#fname1 = '271147142_778c4e7999_o'
-#fname2 = '275191466_a33f8c30b7_o'
+fname1 = '271147142_778c4e7999_o'
+fname2 = '275191466_a33f8c30b7_o'
 
 def get_K_Rt(K_: [3, 3], R: [3, 3], T: [3]):
     B = 1
@@ -25,6 +25,16 @@ def get_K_Rt(K_: [3, 3], R: [3, 3], T: [3]):
     Rt[:,  3, 3] = 1.
 
     return K, Rt
+
+def build_pinhole(K_3x3: ['B', 3, 3], Rt: ['B', 4, 4], shape):
+    K_4x4 = torch.zeros(K_3x3.shape[0], 4, 4)
+    K_4x4[:, :3, :3] = K_3x3
+    K_4x4[:,  3,  3] = 1.
+
+    width  = torch.tensor([shape[0]], dtype=torch.float32)
+    height = torch.tensor([shape[1]], dtype=torch.float32)
+
+    return kornia.PinholeCamera(K_4x4, Rt, width, height)
 
 def read_data(fname):
     ''' read the files and return a
@@ -98,23 +108,23 @@ img2, dep2, K2, Rt2 = read_data(fname2)
 
 shape = 1024, 1024
 
-img2, dep2, K2 = scale_and_pad(img2, dep2, K2, shape)
 img1, dep1, K1 = scale_and_pad(img1, dep1, K1, shape)
+img2, dep2, K2 = scale_and_pad(img2, dep2, K2, shape)
+
+pin1 = build_pinhole(K1, Rt1, img1.shape)
+pin2 = build_pinhole(K2, Rt2, img2.shape)
 
 img1_bchw = img1.permute(2, 0, 1)[None]
 img2_bchw = img2.permute(2, 0, 1)[None]
+dep1_bchw = dep1[None, None]
+dep2_bchw = dep2[None, None]
 
-trans_12 = Rt2 @ torch.inverse(Rt1)
-trans_21 = Rt1 @ torch.inverse(Rt2)
-
-# warp from image 2 to image 1
-warp_12 = kornia.geometry.warp_frame_depth(
-    img2_bchw, dep1[None, None], trans_12, K1
+warp_1_to_2 = kornia.geometry.warp.depth_warp(
+    pin1, pin2, dep2_bchw, img1_bchw, *shape
 )
 
-# warp from image 1 to image 2
-warp_21 = kornia.geometry.warp_frame_depth(
-    img1_bchw, dep2[None, None], trans_21, K2
+warp_2_to_1 = kornia.geometry.warp.depth_warp(
+    pin2, pin1, dep1_bchw, img2_bchw, *shape
 )
 
 fig, axes = plt.subplots(2, 3, constrained_layout=True)
@@ -122,6 +132,6 @@ axes[0, 0].imshow(img1.numpy())
 axes[1, 0].imshow(img2.numpy())
 axes[0, 1].imshow(dep1.numpy())
 axes[1, 1].imshow(dep2.numpy())
-axes[0, 2].imshow(warp_12[0].permute(1, 2, 0).numpy())
-axes[1, 2].imshow(warp_21[0].permute(1, 2, 0).numpy())
+axes[0, 2].imshow(warp_2_to_1[0].permute(1, 2, 0).numpy())
+axes[1, 2].imshow(warp_1_to_2[0].permute(1, 2, 0).numpy())
 plt.show()
